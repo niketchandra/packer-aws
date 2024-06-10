@@ -1,0 +1,63 @@
+{
+  "variables": {
+    "aws_access_key": "{{env `AWS_ACCESS_KEY`}}",
+    "aws_secret_key": "{{env `AWS_SECRET_KEY`}}",
+    "region": "{{env `AWS_REGION`}}",
+    "source_ami": "{{env `SOURCE_AMI`}}",
+    "instance_type": "{{env `INSTANCE_TYPE`}}",
+    "ssh_username": "{{env `SSH_USERNAME`}}",
+    "tailscale_authkey": "{{env `TAILSCALE_AUTHKEY`}}",
+    "newrelic_license_key": "{{env `NEWRELIC_LICENSE_KEY`}}",
+    "key_name": "{{env `KEY_NAME`}}"
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "access_key": "{{user `aws_access_key`}}",
+    "secret_key": "{{user `aws_secret_key`}}",
+    "region": "{{user `region`}}",
+    "source_ami": "{{user `source_ami`}}",
+    "instance_type": "{{user `instance_type`}}",
+    "ssh_username": "{{user `ssh_username`}}",
+    "ami_name": "ubuntu-24-docker-tailscale-newrelic-ansible",
+    "ssh_keypair_name": "{{user `key_name`}}",
+    "associate_public_ip_address": true
+  }],
+  "provisioners": [
+    {
+      "type": "shell",
+      "inline": [
+        "sudo apt-get update",
+        "sudo apt-get upgrade -y",
+        "sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common",
+        "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -",
+        "sudo add-apt-repository 'deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable'",
+        "sudo apt-get update",
+        "sudo apt-get install -y docker-ce",
+        "sudo curl -L \"https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)\" -o /usr/local/bin/docker-compose",
+        "sudo chmod +x /usr/local/bin/docker-compose",
+        "curl -fsSL https://tailscale.com/install.sh | sh",
+        "sudo tailscale up --authkey {{user `tailscale_authkey`}}",
+        "curl -Ls https://download.newrelic.com/infrastructure_agent/gpg/newrelic-infra.gpg | sudo gpg --dearmor -o /usr/share/keyrings/newrelic-infra-archive-keyring.gpg",
+        "echo \"deb [signed-by=/usr/share/keyrings/newrelic-infra-archive-keyring.gpg] https://download.newrelic.com/infrastructure_agent/linux/apt focal main\" | sudo tee /etc/apt/sources.list.d/newrelic-infra.list",
+        "sudo apt-get update",
+        "sudo apt-get install -y newrelic-infra",
+        "sudo systemctl start newrelic-infra",
+        "sudo systemctl enable newrelic-infra",
+        "sudo apt-get install -y ansible",
+        "sudo useradd -m -s /bin/bash ansible",
+        "echo 'ansible ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/ansible",
+        "sudo -u ansible mkdir -p /home/ansible/.ssh",
+        "echo '[servers]' | sudo tee /home/ansible/inventory",
+        "for i in {1..255}; do echo '192.168.1.'$i >> /home/ansible/inventory; done",
+        "sudo chown -R ansible:ansible /home/ansible"
+      ]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo \"license_key: {{user `newrelic_license_key`}}\" | sudo tee -a /etc/newrelic-infra.yml",
+        "sudo systemctl restart newrelic-infra"
+      ]
+    }
+  ]
+}
