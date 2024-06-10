@@ -1,0 +1,33 @@
+name: Build AMI with Packer
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Packer
+      uses: hashicorp/setup-packer@v2.0.0
+
+    - name: Validate Packer template
+      run: packer validate ubuntu_24_ami.json
+
+    - name: Build AMI with Packer
+      env:
+        AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+        AWS_SECRET_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        AWS_REGION: ${{ secrets.AWS_REGION }}
+        SOURCE_AMI: ${{ secrets.SOURCE_AMI }}
+        INSTANCE_TYPE: ${{ secrets.INSTANCE_TYPE }}
+        SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+        TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        NEWRELIC_LICENSE_KEY: ${{ secrets.NEWRELIC_LICENSE_KEY }}
+        KEY_NAME: ${{ secrets.KEY_NAME }}
+      run: packer build ubuntu_24_ami.json
